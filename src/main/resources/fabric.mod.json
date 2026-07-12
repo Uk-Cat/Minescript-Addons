@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "minescript-addons",
+	"version": "${version}",
+	"name": "Minescript Addons",
+	"description": "Download Minescript scripts from GitHub repos with one click. Browse curated scripts or paste any GitHub repo URL.",
+	"authors": [
+		"Uk-Cat"
+	],
+	"contact": {
+		"homepage": "https://github.com/R4z0rX/minescript-addons",
+		"sources": "https://github.com/R4z0rX/minescript-addons"
+	},
+	"license": "MIT",
+	"icon": "assets/minescript-addons/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			"com.minescript.addons.MinescriptAddonsMod"
+		],
+		"client": [
+			"com.minescript.addons.client.MinescriptAddonsClient"
+		],
+		"modmenu": [
+			"com.minescript.addons.MinescriptAddonsMenu"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*",
+		"modmenu": ">=13.0.0"
+	}
+}

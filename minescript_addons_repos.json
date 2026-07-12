@@ -1,0 +1,11 @@
+{
+    "repos": [
+        {
+            "name": "Minescript Plus",
+            "url": "https://github.com/R4z0rX/minescript-scripts/tree/7f74c3861cbf53c36c8acb12c9f3bad7e90dec75/Minescript-Plus",
+            "description": "User-friendly API for Minescript that adds extra functionality: Inventory, Screen, Gui, Hud, Events and more",
+            "author": "RazrCraft",
+            "ref": "7f74c3861cbf53c36c8acb12c9f3bad7e90dec75"
+        }
+    ]
+}
