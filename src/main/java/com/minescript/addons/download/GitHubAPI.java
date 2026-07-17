@@ -309,17 +309,8 @@ public class GitHubAPI {
                 JsonArray arr = json.getAsJsonArray("repos");
 
                 for (JsonElement el : arr) {
-                    JsonObject obj = el.getAsJsonObject();
-                    String name = obj.get("name").getAsString();
-                    String url = obj.get("url").getAsString();
-                    String description = obj.has("description") ? obj.get("description").getAsString() : "";
-                    String author = obj.has("author") ? obj.get("author").getAsString() : "";
-                    String ref = obj.has("ref") ? obj.get("ref").getAsString() : "";
-
-                    RepoEntry repo = RepoEntry.fromUrl(url, name);
-                    repo.setDescription(description);
-                    repo.setAuthor(author);
-                    repo.setRef(ref);
+                    String url = el.getAsString();
+                    RepoEntry repo = RepoEntry.fromUrl(url, null);
                     repos.add(repo);
                 }
 
