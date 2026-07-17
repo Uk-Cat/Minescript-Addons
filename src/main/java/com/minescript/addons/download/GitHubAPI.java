@@ -287,5 +287,49 @@ public class GitHubAPI {
         return sb.toString();
     }
 
+    public static CompletableFuture<List<RepoEntry>> fetchCuratedRepos() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<RepoEntry> repos = new ArrayList<>();
+            try {
+                String curatedUrl = RAW_BASE + "/Uk-Cat/Minescript-Addons/main/URLS.json";
+                LOGGER.info("Fetching curated repos from: {}", curatedUrl);
+
+                HttpURLConnection conn = (HttpURLConnection) URI.create(curatedUrl).toURL().openConnection();
+                conn.setRequestProperty("User-Agent", USER_AGENT);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+
+                if (conn.getResponseCode() != 200) {
+                    LOGGER.warn("Failed to fetch URLS.json: HTTP {}", conn.getResponseCode());
+                    return repos;
+                }
+
+                String body = readStream(conn.getInputStream());
+                JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+                JsonArray arr = json.getAsJsonArray("repos");
+
+                for (JsonElement el : arr) {
+                    JsonObject obj = el.getAsJsonObject();
+                    String name = obj.get("name").getAsString();
+                    String url = obj.get("url").getAsString();
+                    String description = obj.has("description") ? obj.get("description").getAsString() : "";
+                    String author = obj.has("author") ? obj.get("author").getAsString() : "";
+                    String ref = obj.has("ref") ? obj.get("ref").getAsString() : "";
+
+                    RepoEntry repo = RepoEntry.fromUrl(url, name);
+                    repo.setDescription(description);
+                    repo.setAuthor(author);
+                    repo.setRef(ref);
+                    repos.add(repo);
+                }
+
+                LOGGER.info("Fetched {} curated repos from URLS.json", repos.size());
+            } catch (Exception e) {
+                LOGGER.warn("Failed to fetch URLS.json: {}", e.getMessage());
+            }
+            return repos;
+        }, EXECUTOR);
+    }
+
     public record DownloadResult(String fileName, boolean success, String errorMessage) {}
 }

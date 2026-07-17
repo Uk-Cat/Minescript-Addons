@@ -3,6 +3,7 @@ package com.minescript.addons.config;
 import com.google.gson.*;
 import com.minescript.addons.MinescriptAddonsMod;
 import com.minescript.addons.data.RepoEntry;
+import com.minescript.addons.download.GitHubAPI;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,9 @@ public class ModConfig {
     private boolean showFolderButton = true;
     private boolean showAddRepoButton = true;
 
+    private List<String> hiddenCuratedRepos = new ArrayList<>();
+    private static List<RepoEntry> curatedReposCache = null;
+
     public List<RepoEntry> getUserRepos() { return userRepos; }
     public List<String> getInstalledFiles() { return installedFiles; }
     public String getScriptFolder() { return scriptFolder; }
@@ -53,6 +57,19 @@ public class ModConfig {
         showAddRepoButton = value;
         save();
     }
+    public List<String> getHiddenCuratedRepos() { return hiddenCuratedRepos; }
+    public boolean isCuratedRepoHidden(String url) { return hiddenCuratedRepos.contains(url); }
+    public void hideCuratedRepo(String url) {
+        if (!hiddenCuratedRepos.contains(url)) {
+            hiddenCuratedRepos.add(url);
+            save();
+        }
+    }
+    public void restoreCuratedRepo(String url) {
+        hiddenCuratedRepos.remove(url);
+        save();
+    }
+    public static void clearCuratedCache() { curatedReposCache = null; }
     public void setScriptFolder(String value) {
         scriptFolder = value != null ? value : "";
         save();
@@ -120,6 +137,12 @@ public class ModConfig {
                 if (json.has("showAddRepoButton")) {
                     config.showAddRepoButton = json.get("showAddRepoButton").getAsBoolean();
                 }
+                if (json.has("hiddenCuratedRepos")) {
+                    JsonArray arr = json.getAsJsonArray("hiddenCuratedRepos");
+                    for (JsonElement el : arr) {
+                        config.hiddenCuratedRepos.add(el.getAsString());
+                    }
+                }
             } catch (Exception e) {
                 LOGGER.error("Failed to load config: {}", e.getMessage());
             }
@@ -153,6 +176,12 @@ public class ModConfig {
             json.addProperty("showFolderButton", showFolderButton);
             json.addProperty("showAddRepoButton", showAddRepoButton);
 
+            JsonArray hiddenArr = new JsonArray();
+            for (String url : hiddenCuratedRepos) {
+                hiddenArr.add(url);
+            }
+            json.add("hiddenCuratedRepos", hiddenArr);
+
             Files.createDirectories(CONFIG_PATH.getParent());
             Files.writeString(CONFIG_PATH, GSON.toJson(json), StandardCharsets.UTF_8);
         } catch (Exception e) {
@@ -161,8 +190,26 @@ public class ModConfig {
     }
 
     public static List<RepoEntry> loadCuratedRepos() {
-        List<RepoEntry> repos = new ArrayList<>();
+        if (curatedReposCache != null) return curatedReposCache;
 
+        List<RepoEntry> repos = loadBundledRepos();
+        curatedReposCache = repos;
+
+        GitHubAPI.fetchCuratedRepos().whenComplete((fetched, error) -> {
+            if (error == null && !fetched.isEmpty()) {
+                curatedReposCache = fetched;
+                LOGGER.info("Updated curated repos from GitHub ({} repos)", fetched.size());
+            } else if (error != null) {
+                LOGGER.warn("GitHub curated fetch failed, using bundled: {}", error.getMessage());
+            }
+        });
+
+        LOGGER.info("Loaded {} curated repos (async GitHub fetch pending)", repos.size());
+        return repos;
+    }
+
+    private static List<RepoEntry> loadBundledRepos() {
+        List<RepoEntry> repos = new ArrayList<>();
         try {
             if (Files.exists(REPOS_PATH)) {
                 try (InputStream in = Files.newInputStream(REPOS_PATH)) {
@@ -182,10 +229,8 @@ public class ModConfig {
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to load curated repos: {}", e.getMessage());
+            LOGGER.error("Failed to load bundled curated repos: {}", e.getMessage());
         }
-
-        LOGGER.info("Loaded {} curated repos", repos.size());
         return repos;
     }
 

@@ -63,15 +63,19 @@ public class AddonManagerScreen extends Screen {
     private void reloadRepos() {
         allRepos = new ArrayList<>();
         List<RepoEntry> curated = ModConfig.loadCuratedRepos();
-        allRepos.addAll(curated);
+        for (RepoEntry r : curated) {
+            if (!config.isCuratedRepoHidden(r.getUrl())) {
+                allRepos.add(r);
+            }
+        }
         List<RepoEntry> user = config.getUserRepos();
         allRepos.addAll(user);
         userRepoUrls.clear();
         for (RepoEntry r : user) {
             userRepoUrls.add(r.getUrl());
         }
-        LOGGER.info("reloadRepos: {} total repos ({} curated, {} user)",
-            allRepos.size(), curated.size(), user.size());
+        LOGGER.info("reloadRepos: {} total repos ({} curated visible, {} user)",
+            allRepos.size(), allRepos.size() - user.size(), user.size());
         for (RepoEntry r : allRepos) {
             LOGGER.info("  Repo: name='{}' url='{}' author='{}'",
                 r.getName(), r.getUrl(), r.getAuthor());
@@ -150,11 +154,17 @@ public class AddonManagerScreen extends Screen {
                     cardButtons.add(viewBtn);
                     addRenderableWidget(viewBtn);
 
-                    if (userRepoUrls.contains(repo.getUrl())) {
-                        RepoEntry capturedForDelete = repo;
+                    {
+                        RepoEntry capturedForAction = repo;
                         Button deleteBtn = Button.builder(
                             Component.literal("X"),
-                            b -> deleteRepo(capturedForDelete)
+                            b -> {
+                                if (userRepoUrls.contains(capturedForAction.getUrl())) {
+                                    deleteRepo(capturedForAction);
+                                } else {
+                                    hideCuratedRepo(capturedForAction);
+                                }
+                            }
                         ).bounds(rightEdge - 45, btnY, 20, 18).build();
                         cardButtons.add(deleteBtn);
                         addRenderableWidget(deleteBtn);
@@ -481,6 +491,15 @@ public class AddonManagerScreen extends Screen {
         setStatus(Component.translatable("text.minescript-addons.repo_deleted", repo.getName()));
     }
 
+    private void hideCuratedRepo(RepoEntry repo) {
+        config.hideCuratedRepo(repo.getUrl());
+        fileCache.remove(repo.getUrl());
+        expandedRepos.remove(repo);
+        reloadRepos();
+        rebuildCardButtons();
+        setStatus(Component.translatable("text.minescript-addons.curated_hidden", repo.getName()));
+    }
+
     private void openAddRepoPopup() {
         Minecraft.getInstance().setScreen(new AddRepoPopup(this, config, this::onRepoAdded));
     }
@@ -495,6 +514,7 @@ public class AddonManagerScreen extends Screen {
         fileCache.clear();
         expandedRepos.clear();
         scrollOffset = 0;
+        ModConfig.clearCuratedCache();
         reloadRepos();
         rebuildCardButtons();
     }
