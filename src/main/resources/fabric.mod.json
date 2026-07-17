@@ -14,6 +14,9 @@
 	"license": "MIT",
 	"icon": "assets/minescript-addons/icon.png",
 	"environment": "client",
+	"mixins": [
+		"minescript-addons.client.mixins.json"
+	],
 	"entrypoints": {
 		"main": [
 			"com.minescript.addons.MinescriptAddonsMod"

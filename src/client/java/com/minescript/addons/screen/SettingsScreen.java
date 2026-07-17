@@ -48,6 +48,40 @@ public class SettingsScreen extends Screen {
             Component.translatable("text.minescript-addons.back"),
             btn -> onClose()
         ).bounds(width - 70, 8, 60, 20).build());
+
+        int toggleY = centerY + 40;
+        addRenderableWidget(Button.builder(
+            Component.translatable("text.minescript-addons.show_addons_button",
+                config.isShowAddonsButton()
+                    ? Component.translatable("text.minescript-addons.toggle_on")
+                    : Component.translatable("text.minescript-addons.toggle_off")),
+            btn -> {
+                config.setShowAddonsButton(!config.isShowAddonsButton());
+                init();
+            }
+        ).bounds(centerX - 150, toggleY, 300, 20).build());
+
+        addRenderableWidget(Button.builder(
+            Component.translatable("text.minescript-addons.show_folder_button",
+                config.isShowFolderButton()
+                    ? Component.translatable("text.minescript-addons.toggle_on")
+                    : Component.translatable("text.minescript-addons.toggle_off")),
+            btn -> {
+                config.setShowFolderButton(!config.isShowFolderButton());
+                init();
+            }
+        ).bounds(centerX - 150, toggleY + 24, 300, 20).build());
+
+        addRenderableWidget(Button.builder(
+            Component.translatable("text.minescript-addons.show_add_repo_button",
+                config.isShowAddRepoButton()
+                    ? Component.translatable("text.minescript-addons.toggle_on")
+                    : Component.translatable("text.minescript-addons.toggle_off")),
+            btn -> {
+                config.setShowAddRepoButton(!config.isShowAddRepoButton());
+                init();
+            }
+        ).bounds(centerX - 150, toggleY + 48, 300, 20).build());
     }
 
     private void pickFolder() {

@@ -30,5 +30,11 @@
     "text.minescript-addons.settings_title": "Settings",
     "text.minescript-addons.back": "Back",
     "text.minescript-addons.settings": "Settings",
-    "text.minescript-addons.choose_location": "Choose file location"
+    "text.minescript-addons.choose_location": "Choose file location",
+    "text.minescript-addons.open_addons": "Minescript Addons",
+    "text.minescript-addons.show_addons_button": "Show Addons Button: %s",
+    "text.minescript-addons.show_folder_button": "Show Folder Button: %s",
+    "text.minescript-addons.show_add_repo_button": "Show Add Repo Button: %s",
+    "text.minescript-addons.toggle_on": "ON",
+    "text.minescript-addons.toggle_off": "OFF"
 }

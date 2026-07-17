@@ -30,7 +30,7 @@ public class AddRepoPopup extends Screen {
     private Component errorMessage;
     private boolean loading;
 
-    protected AddRepoPopup(Screen parent, ModConfig config, Runnable onAdded) {
+    public AddRepoPopup(Screen parent, ModConfig config, Runnable onAdded) {
         super(Component.translatable("text.minescript-addons.add_repo_title"));
         this.parent = parent;
         this.config = config;

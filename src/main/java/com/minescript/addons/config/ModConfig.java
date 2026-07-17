@@ -26,6 +26,9 @@ public class ModConfig {
     private List<String> installedFiles = new ArrayList<>();
     private String scriptFolder = "";
     private boolean disclaimerAccepted = false;
+    private boolean showAddonsButton = true;
+    private boolean showFolderButton = true;
+    private boolean showAddRepoButton = true;
 
     public List<RepoEntry> getUserRepos() { return userRepos; }
     public List<String> getInstalledFiles() { return installedFiles; }
@@ -33,6 +36,21 @@ public class ModConfig {
     public boolean isDisclaimerAccepted() { return disclaimerAccepted; }
     public void setDisclaimerAccepted(boolean value) {
         disclaimerAccepted = value;
+        save();
+    }
+    public boolean isShowAddonsButton() { return showAddonsButton; }
+    public boolean isShowFolderButton() { return showFolderButton; }
+    public boolean isShowAddRepoButton() { return showAddRepoButton; }
+    public void setShowAddonsButton(boolean value) {
+        showAddonsButton = value;
+        save();
+    }
+    public void setShowFolderButton(boolean value) {
+        showFolderButton = value;
+        save();
+    }
+    public void setShowAddRepoButton(boolean value) {
+        showAddRepoButton = value;
         save();
     }
     public void setScriptFolder(String value) {
@@ -93,6 +111,15 @@ public class ModConfig {
                 if (json.has("disclaimerAccepted")) {
                     config.disclaimerAccepted = json.get("disclaimerAccepted").getAsBoolean();
                 }
+                if (json.has("showAddonsButton")) {
+                    config.showAddonsButton = json.get("showAddonsButton").getAsBoolean();
+                }
+                if (json.has("showFolderButton")) {
+                    config.showFolderButton = json.get("showFolderButton").getAsBoolean();
+                }
+                if (json.has("showAddRepoButton")) {
+                    config.showAddRepoButton = json.get("showAddRepoButton").getAsBoolean();
+                }
             } catch (Exception e) {
                 LOGGER.error("Failed to load config: {}", e.getMessage());
             }
@@ -122,6 +149,9 @@ public class ModConfig {
             json.add("installedFiles", installedArr);
             json.addProperty("scriptFolder", scriptFolder);
             json.addProperty("disclaimerAccepted", disclaimerAccepted);
+            json.addProperty("showAddonsButton", showAddonsButton);
+            json.addProperty("showFolderButton", showFolderButton);
+            json.addProperty("showAddRepoButton", showAddRepoButton);
 
             Files.createDirectories(CONFIG_PATH.getParent());
             Files.writeString(CONFIG_PATH, GSON.toJson(json), StandardCharsets.UTF_8);
