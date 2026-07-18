@@ -52,6 +52,7 @@ public class AddonManagerScreen extends Screen {
     private int statusTimer;
 
     private final List<AbstractWidget> cardButtons = new ArrayList<>();
+    private ImageButton githubBtn, discordBtn, settingsBtn;
 
     public AddonManagerScreen(Screen parent) {
         super(Component.translatable("text.minescript-addons.title"));
@@ -102,17 +103,17 @@ public class AddonManagerScreen extends Screen {
         addRenderableWidget(Button.builder(
             CommonComponents.GUI_CANCEL, btn -> onClose()
         ).bounds(startX + btnW + 5 + btnR + 5, bottomY, btnC, 20).build());
-        addRenderableWidget(new ImageButton(
+        githubBtn = addRenderableWidget(new ImageButton(
             width - 82, 6, 22, 22,
             Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/github_logo.png"),
             () -> openLink("https://github.com/Uk-Cat/Minescript-Addons")
         ));
-        addRenderableWidget(new ImageButton(
+        discordBtn = addRenderableWidget(new ImageButton(
             width - 56, 6, 22, 22,
             Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/discord_logo.png"),
             () -> openLink("https://discord.gg/85QzqzuzBw")
         ));
-        addRenderableWidget(new ImageButton(
+        settingsBtn = addRenderableWidget(new ImageButton(
             width - 30, 6, 22, 22,
             Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/setting.png"),
             () -> openSettings()
@@ -331,11 +332,13 @@ public class AddonManagerScreen extends Screen {
 
         super.render(gui, mouseX, mouseY, delta);
 
-        int overlayLeft = contentLeft - 2;
-        int overlayRight = Math.min(contentLeft + contentWidth + 2, width - 145);
-        gui.fill(overlayLeft, 0, overlayRight, CONTENT_TOP, 0xFF1A1A2E);
+        gui.fill(0, 0, width, CONTENT_TOP, 0xFF1A1A2E);
 
         gui.drawString(font, title, (width - font.width(title)) / 2, 8, 0xFFE0E0E0, false);
+
+        if (githubBtn != null) githubBtn.render(gui, mouseX, mouseY, delta);
+        if (discordBtn != null) discordBtn.render(gui, mouseX, mouseY, delta);
+        if (settingsBtn != null) settingsBtn.render(gui, mouseX, mouseY, delta);
 
         if (statusMessage != null && statusTimer > 0) {
             int sw = font.width(statusMessage);
@@ -463,7 +466,7 @@ public class AddonManagerScreen extends Screen {
     }
 
     private void openSettings() {
-        Minecraft.getInstance().setScreen(new SettingsScreen(this, config));
+        Minecraft.getInstance().setScreen(new SettingsScreen(this, config, this::refreshRepos));
     }
 
     private void openLink(String url) {

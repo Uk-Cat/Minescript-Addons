@@ -22,6 +22,7 @@ public class MinescriptAddonsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ModCommands.register();
+        MinescriptErrorHandler.register();
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PauseScreen)) return;

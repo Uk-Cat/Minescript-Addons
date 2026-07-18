@@ -1,5 +1,6 @@
 package com.minescript.addons.command;
 
+import com.minescript.addons.client.MinescriptErrorHandler;
 import com.minescript.addons.MinescriptAddonsMod;
 import com.minescript.addons.config.ModConfig;
 import com.minescript.addons.data.RepoEntry;
@@ -7,6 +8,8 @@ import com.minescript.addons.download.GitHubAPI;
 import com.minescript.addons.manager.ScriptManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
@@ -17,6 +20,23 @@ import java.util.concurrent.CompletableFuture;
 public class ModCommands {
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            dispatcher.register(ClientCommandManager.literal("minescriptcopy")
+                .executes(context -> {
+                    String error = MinescriptErrorHandler.lastError;
+                    if (error != null) {
+                        Minecraft.getInstance().keyboardHandler.setClipboard(error);
+                        context.getSource().sendFeedback(
+                            Component.literal("Copied to clipboard").withStyle(ChatFormatting.GREEN)
+                        );
+                    } else {
+                        context.getSource().sendFeedback(
+                            Component.literal("No error to copy").withStyle(ChatFormatting.RED)
+                        );
+                    }
+                    return 1;
+                })
+            );
+
             dispatcher.register(ClientCommandManager.literal("install")
                 .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
                     .executes(context -> {

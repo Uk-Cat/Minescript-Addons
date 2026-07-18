@@ -35,6 +35,7 @@
     "text.minescript-addons.show_addons_button": "Show Addons Button: %s",
     "text.minescript-addons.show_folder_button": "Show Folder Button: %s",
     "text.minescript-addons.show_add_repo_button": "Show Add Repo Button: %s",
+    "text.minescript-addons.auto_copy_to_clipboard": "Auto-Copy to Clipboard: %s",
     "text.minescript-addons.toggle_on": "ON",
     "text.minescript-addons.toggle_off": "OFF",
     "text.minescript-addons.restore": "Restore",
