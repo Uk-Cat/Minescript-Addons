@@ -16,6 +16,7 @@ You will need [ModMenu](https://modrinth.com/mod/modmenu) as a required dependen
 - Ability to download script from just github link View the repository and Author in your browser at the click of a button.
 - Download scripts with only commands
 - Shortcuts in pause screen
+- Copy to clipboard errors and Auto Copy to Clipboard
 
 ### **Planned features:**
 - Automatically adding "from system.lib.minescript import *" at the start of every python file 
