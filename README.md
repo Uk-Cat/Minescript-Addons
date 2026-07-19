@@ -21,4 +21,4 @@ You will need [ModMenu](https://modrinth.com/mod/modmenu) as a required dependen
 - Automatically adding "from system.lib.minescript import *" at the start of every python file 
 - Downloading multiple repos from a json text for easy transfer between profiles
 
-The Mod is currently only made for 1.21.11 Fabric, other version may soon come however that is not guaranteed.
+The Mod is currently only made for 1.21.5 to 1.21.11 Fabric, other version may soon come however that is not guaranteed.
