@@ -131,17 +131,24 @@ public class RepoEntry {
         private String name;
         private String downloadUrl;
         private long size;
+        private String sha;
 
         public ScriptFile() {}
 
         public ScriptFile(String name, String downloadUrl, long size) {
+            this(name, downloadUrl, size, "");
+        }
+
+        public ScriptFile(String name, String downloadUrl, long size, String sha) {
             this.name = name;
             this.downloadUrl = downloadUrl;
             this.size = size;
+            this.sha = sha != null ? sha : "";
         }
 
         public String getName() { return name; }
         public String getDownloadUrl() { return downloadUrl; }
         public long getSize() { return size; }
+        public String getSha() { return sha != null ? sha : ""; }
     }
 }

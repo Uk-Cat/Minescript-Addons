@@ -2,6 +2,8 @@
     "text.minescript-addons.title": "Minescript Addons",
     "text.minescript-addons.view_on_github": "View on GitHub",
     "text.minescript-addons.download": "Download",
+    "text.minescript-addons.update": "Update",
+    "text.minescript-addons.update_success": "Updated: %s",
     "text.minescript-addons.download_selected": "Download Selected",
     "text.minescript-addons.add_custom_repo": "Add Custom Repo",
     "text.minescript-addons.refresh": "Refresh",

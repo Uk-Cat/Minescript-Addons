@@ -81,7 +81,7 @@ public class GitHubAPI {
                         if (type.equals("file") && isScriptFile(itemName)) {
                             String downloadUrl = obj.get("download_url").getAsString();
                             long size = obj.get("size").getAsLong();
-                            result.add(new ScriptFile(itemName, downloadUrl, size));
+                            result.add(new ScriptFile(itemName, downloadUrl, size, getStringOrEmpty(obj, "sha")));
                         } else if (type.equals("dir")) {
                             String dirPath = obj.get("path").getAsString();
                             result.addAll(listFilesRecursive(owner, repoName, ref, dirPath));
@@ -94,7 +94,7 @@ public class GitHubAPI {
                     if (type.equals("file") && isScriptFile(itemName)) {
                         String downloadUrl = obj.get("download_url").getAsString();
                         long size = obj.get("size").getAsLong();
-                        result.add(new ScriptFile(itemName, downloadUrl, size));
+                        result.add(new ScriptFile(itemName, downloadUrl, size, getStringOrEmpty(obj, "sha")));
                     }
                 }
 
@@ -201,7 +201,7 @@ public class GitHubAPI {
                     if (type.equals("file") && isScriptFile(itemName)) {
                         String downloadUrl = obj.get("download_url").getAsString();
                         long size = obj.get("size").getAsLong();
-                        result.add(new ScriptFile(itemName, downloadUrl, size));
+                        result.add(new ScriptFile(itemName, downloadUrl, size, getStringOrEmpty(obj, "sha")));
                     } else if (type.equals("dir")) {
                         String dirPath = obj.get("path").getAsString();
                         result.addAll(listFilesRecursive(owner, repo, ref, dirPath));
@@ -215,6 +215,14 @@ public class GitHubAPI {
     }
 
     public static CompletableFuture<DownloadResult> downloadFile(String fileName, String downloadUrl, Path targetFolder) {
+        return downloadFile(fileName, downloadUrl, targetFolder, false);
+    }
+
+    /**
+     * @param overwrite if true, overwrite the existing file in place (used for updates).
+     *                  if false, keep old behaviour of writing file_1, file_2, ... on collision (fresh installs).
+     */
+    public static CompletableFuture<DownloadResult> downloadFile(String fileName, String downloadUrl, Path targetFolder, boolean overwrite) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 LOGGER.info("Downloading {} from {}", fileName, downloadUrl);
@@ -230,12 +238,14 @@ public class GitHubAPI {
                 }
 
                 Path targetFile = targetFolder.resolve(fileName);
-                int counter = 1;
-                while (Files.exists(targetFile)) {
-                    String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
-                    String ext = fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.')) : "";
-                    targetFile = targetFolder.resolve(baseName + "_" + counter + ext);
-                    counter++;
+                if (!overwrite) {
+                    int counter = 1;
+                    while (Files.exists(targetFile)) {
+                        String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+                        String ext = fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.')) : "";
+                        targetFile = targetFolder.resolve(baseName + "_" + counter + ext);
+                        counter++;
+                    }
                 }
 
                 Files.createDirectories(targetFolder);
@@ -264,6 +274,16 @@ public class GitHubAPI {
             if (lower.endsWith(ext)) return true;
         }
         return false;
+    }
+
+    private static String getStringOrEmpty(JsonObject obj, String key) {
+        try {
+            if (obj.has(key) && !obj.get(key).isJsonNull()) {
+                return obj.get(key).getAsString();
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
     }
 
     private static String encodePath(String path) {

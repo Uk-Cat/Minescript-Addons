@@ -25,6 +25,12 @@ public class ModConfig {
 
     private List<RepoEntry> userRepos = new ArrayList<>();
     private List<String> installedFiles = new ArrayList<>();
+    /**
+     * Hashmap of downloaded scripts: file name -> install metadata.
+     * Used to detect updates by comparing the stored remote sha against
+     * the current sha reported by GitHub.
+     */
+    private java.util.Map<String, InstalledScript> installedScripts = new java.util.LinkedHashMap<>();
     private String scriptFolder = "";
     private boolean disclaimerAccepted = false;
     private boolean showAddonsButton = true;
@@ -38,6 +44,7 @@ public class ModConfig {
 
     public List<RepoEntry> getUserRepos() { return userRepos; }
     public List<String> getInstalledFiles() { return installedFiles; }
+    public java.util.Map<String, InstalledScript> getInstalledScripts() { return installedScripts; }
     public String getScriptFolder() { return scriptFolder; }
     public boolean isDisclaimerAccepted() { return disclaimerAccepted; }
     public void setDisclaimerAccepted(boolean value) {
@@ -103,6 +110,37 @@ public class ModConfig {
             installedFiles.add(fileName);
             save();
         }
+        installedScripts.putIfAbsent(fileName, new InstalledScript("", "", "", ""));
+        save();
+    }
+
+    /** Record a download with its hashes so future update checks can compare. */
+    public void recordInstall(String fileName, String remoteSha, String localHash, String repoUrl, String downloadUrl) {
+        if (fileName == null) return;
+        if (!installedFiles.contains(fileName)) {
+            installedFiles.add(fileName);
+        }
+        installedScripts.put(fileName, new InstalledScript(
+            remoteSha != null ? remoteSha : "",
+            localHash != null ? localHash : "",
+            repoUrl != null ? repoUrl : "",
+            downloadUrl != null ? downloadUrl : ""));
+        save();
+    }
+
+    public String getStoredSha(String fileName) {
+        InstalledScript s = installedScripts.get(fileName);
+        return s != null ? s.getSha() : "";
+    }
+
+    public boolean isUpdateAvailable(String fileName, String remoteSha) {
+        if (remoteSha == null || remoteSha.isEmpty()) return false;
+        InstalledScript s = installedScripts.get(fileName);
+        if (s == null) return false;
+        String stored = s.getSha();
+        // Files installed before hash tracking have no baseline: offer update to re-sync.
+        if (stored == null || stored.isEmpty()) return true;
+        return !stored.equals(remoteSha);
     }
 
     public static ModConfig load() {
@@ -131,6 +169,23 @@ public class ModConfig {
                     for (JsonElement el : arr) {
                         config.installedFiles.add(el.getAsString());
                     }
+                }
+
+                if (json.has("installedScripts")) {
+                    JsonObject map = json.getAsJsonObject("installedScripts");
+                    for (String key : map.keySet()) {
+                        JsonObject obj = map.getAsJsonObject(key);
+                        InstalledScript s = new InstalledScript(
+                            obj.has("sha") ? obj.get("sha").getAsString() : "",
+                            obj.has("localHash") ? obj.get("localHash").getAsString() : "",
+                            obj.has("repoUrl") ? obj.get("repoUrl").getAsString() : "",
+                            obj.has("downloadUrl") ? obj.get("downloadUrl").getAsString() : "");
+                        config.installedScripts.put(key, s);
+                    }
+                }
+                // Migrate legacy installs (pre-hashmap) so every installed file has a map entry.
+                for (String f : config.installedFiles) {
+                    config.installedScripts.putIfAbsent(f, new InstalledScript("", "", "", ""));
                 }
 
                 if (json.has("scriptFolder")) {
@@ -188,6 +243,17 @@ public class ModConfig {
                 installedArr.add(f);
             }
             json.add("installedFiles", installedArr);
+
+            JsonObject scriptsObj = new JsonObject();
+            for (java.util.Map.Entry<String, InstalledScript> e : installedScripts.entrySet()) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("sha", e.getValue().getSha());
+                obj.addProperty("localHash", e.getValue().getLocalHash());
+                obj.addProperty("repoUrl", e.getValue().getRepoUrl());
+                obj.addProperty("downloadUrl", e.getValue().getDownloadUrl());
+                scriptsObj.add(e.getKey(), obj);
+            }
+            json.add("installedScripts", scriptsObj);
             json.addProperty("scriptFolder", scriptFolder);
             json.addProperty("disclaimerAccepted", disclaimerAccepted);
             json.addProperty("showAddonsButton", showAddonsButton);
@@ -273,5 +339,29 @@ public class ModConfig {
             repo.setRef(ref);
             repos.add(repo);
         }
+    }
+
+    /** Metadata stored per downloaded script for update detection. */
+    public static class InstalledScript {
+        private String sha;
+        private String localHash;
+        private String repoUrl;
+        private String downloadUrl;
+
+        public InstalledScript() {
+            this("", "", "", "");
+        }
+
+        public InstalledScript(String sha, String localHash, String repoUrl, String downloadUrl) {
+            this.sha = sha != null ? sha : "";
+            this.localHash = localHash != null ? localHash : "";
+            this.repoUrl = repoUrl != null ? repoUrl : "";
+            this.downloadUrl = downloadUrl != null ? downloadUrl : "";
+        }
+
+        public String getSha() { return sha != null ? sha : ""; }
+        public String getLocalHash() { return localHash != null ? localHash : ""; }
+        public String getRepoUrl() { return repoUrl != null ? repoUrl : ""; }
+        public String getDownloadUrl() { return downloadUrl != null ? downloadUrl : ""; }
     }
 }

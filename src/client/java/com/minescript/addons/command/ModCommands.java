@@ -5,7 +5,9 @@ import com.minescript.addons.MinescriptAddonsMod;
 import com.minescript.addons.config.ModConfig;
 import com.minescript.addons.data.RepoEntry;
 import com.minescript.addons.download.GitHubAPI;
+import com.minescript.addons.manager.FileHasher;
 import com.minescript.addons.manager.ScriptManager;
+import com.minescript.addons.manager.UpdateManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.minecraft.ChatFormatting;
@@ -55,6 +57,20 @@ public class ModCommands {
                         return 1;
                     })
                 )
+            );
+
+            dispatcher.register(ClientCommandManager.literal("update")
+                .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                    .executes(context -> {
+                        String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
+                        executeUpdate(context.getSource(), name);
+                        return 1;
+                    })
+                )
+                .executes(context -> {
+                    executeUpdate(context.getSource(), "all");
+                    return 1;
+                })
             );
         });
     }
@@ -121,7 +137,9 @@ public class ModCommands {
 
         GitHubAPI.downloadFile(fileName, rawUrl, folder).thenAccept(result -> {
             if (result.success()) {
-                config.markInstalled(result.fileName());
+                // Single-file blob links have no contents-API sha; seed hashmap with local hash only.
+                String localHash = FileHasher.sha256(folder.resolve(result.fileName()));
+                config.recordInstall(result.fileName(), "", localHash, url, rawUrl);
                 source.sendFeedback(Component.literal("Downloaded: " + result.fileName()));
             } else {
                 source.sendError(Component.literal("Failed: " + result.errorMessage()));
@@ -141,8 +159,17 @@ public class ModCommands {
             Path folder = ScriptManager.getScriptFolder(config.getScriptFolder());
 
             List<CompletableFuture<GitHubAPI.DownloadResult>> futures = new ArrayList<>();
+            // Pair each future with its remote entry so we can seed the hashmap (file -> sha).
+            List<RepoEntry.ScriptFile> remotes = new ArrayList<>();
             for (RepoEntry.ScriptFile file : files) {
-                futures.add(GitHubAPI.downloadFile(file.getName(), file.getDownloadUrl(), folder));
+                Path existing = folder.resolve(file.getName());
+                boolean alreadyThere = java.nio.file.Files.exists(existing)
+                    || config.getInstalledScripts().containsKey(file.getName());
+                CompletableFuture<GitHubAPI.DownloadResult> f = alreadyThere
+                    ? UpdateManager.updateFile(target, file, config, folder)
+                    : UpdateManager.installFile(target, file, config, folder);
+                futures.add(f);
+                remotes.add(file);
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
@@ -153,7 +180,6 @@ public class ModCommands {
                     GitHubAPI.DownloadResult result = f.join();
                     if (result.success()) {
                         success++;
-                        config.markInstalled(result.fileName());
                     } else {
                         fail++;
                         details.append("\n  ").append(result.fileName()).append(": ").append(result.errorMessage());
@@ -169,6 +195,86 @@ public class ModCommands {
         }).exceptionally(e -> {
             source.sendError(Component.literal("Failed: " + e.getMessage()));
             return null;
+        });
+    }
+
+    private static void executeUpdate(net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource source, String input) {
+        ModConfig config = MinescriptAddonsMod.getConfig();
+        Path folder = ScriptManager.getScriptFolder(config.getScriptFolder());
+
+        List<RepoEntry> allRepos = new ArrayList<>();
+        allRepos.addAll(ModConfig.loadCuratedRepos());
+        allRepos.addAll(config.getUserRepos());
+
+        List<RepoEntry> targets = new ArrayList<>();
+        if (input.equalsIgnoreCase("all")) {
+            // Only re-check repos we have actually installed something from (hashmap sources + legacy names).
+            java.util.Set<String> knownUrls = new java.util.HashSet<>();
+            for (ModConfig.InstalledScript s : config.getInstalledScripts().values()) {
+                if (!s.getRepoUrl().isEmpty()) knownUrls.add(s.getRepoUrl());
+            }
+            for (RepoEntry repo : allRepos) {
+                if (knownUrls.contains(repo.getUrl())) targets.add(repo);
+            }
+            if (targets.isEmpty()) {
+                // Fallback: nothing tracked yet, check everything so legacy installs get a baseline.
+                targets.addAll(allRepos);
+            }
+        } else {
+            for (RepoEntry repo : allRepos) {
+                if (repo.getName().equalsIgnoreCase(input) || repo.getUrl().equalsIgnoreCase(input)
+                    || repo.getName().toLowerCase().contains(input.toLowerCase())) {
+                    targets.add(repo);
+                    break;
+                }
+            }
+            if (targets.isEmpty() && input.contains("github.com")) {
+                targets.add(RepoEntry.fromUrl(input, null));
+            }
+        }
+
+        if (targets.isEmpty()) {
+            source.sendError(Component.literal("No matching repo for update check: " + input));
+            return;
+        }
+
+        source.sendFeedback(Component.literal("Checking for updates (" + targets.size() + " repos)..."));
+        List<CompletableFuture<Void>> checks = new ArrayList<>();
+        java.util.concurrent.atomic.AtomicInteger updated = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger upToDate = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger failed = new java.util.concurrent.atomic.AtomicInteger();
+
+        for (RepoEntry repo : targets) {
+            checks.add(UpdateManager.checkRepoForUpdates(repo, config, folder).thenCompose(infos -> {
+                List<CompletableFuture<GitHubAPI.DownloadResult>> ups = new ArrayList<>();
+                for (UpdateManager.UpdateInfo info : infos) {
+                    if (info.installed() && info.updateAvailable()) {
+                        ups.add(UpdateManager.updateFile(repo, info.remoteFile(), config, folder));
+                    } else if (info.installed()) {
+                        upToDate.incrementAndGet();
+                    }
+                }
+                if (ups.isEmpty()) return CompletableFuture.completedFuture(null);
+                return CompletableFuture.allOf(ups.toArray(new CompletableFuture[0])).thenRun(() -> {
+                    for (CompletableFuture<GitHubAPI.DownloadResult> u : ups) {
+                        try {
+                            if (u.join().success()) updated.incrementAndGet();
+                            else failed.incrementAndGet();
+                        } catch (Exception e) {
+                            failed.incrementAndGet();
+                        }
+                    }
+                });
+            }).exceptionally(e -> {
+                failed.incrementAndGet();
+                return null;
+            }));
+        }
+
+        CompletableFuture.allOf(checks.toArray(new CompletableFuture[0])).thenRun(() -> {
+            source.sendFeedback(Component.literal(
+                "Update check done: " + updated.get() + " updated, "
+                    + upToDate.get() + " up to date, " + failed.get() + " failed"));
         });
     }
 }

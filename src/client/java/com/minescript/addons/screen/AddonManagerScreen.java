@@ -5,6 +5,7 @@ import com.minescript.addons.data.RepoEntry;
 import com.minescript.addons.data.RepoEntry.ScriptFile;
 import com.minescript.addons.download.GitHubAPI;
 import com.minescript.addons.manager.ScriptManager;
+import com.minescript.addons.manager.UpdateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -208,8 +209,12 @@ public class AddonManagerScreen extends Screen {
                             ScriptFile fileRef = file;
                             boolean dling = downloadingUrls.contains(file.getDownloadUrl());
                             Path scriptFolder = ScriptManager.getScriptFolder(config.getScriptFolder());
-                            boolean installed = ScriptManager.isScriptInstalled(file.getName(), scriptFolder);
-                            String dlLabel = dling ? "..." : Component.translatable("text.minescript-addons.download").getString();
+                            boolean installed = ScriptManager.isScriptInstalled(file.getName(), scriptFolder)
+                                || config.getInstalledScripts().containsKey(file.getName());
+                            boolean needsUpdate = installed && config.isUpdateAvailable(file.getName(), file.getSha());
+                            String dlLabel = dling ? "..."
+                                : needsUpdate ? Component.translatable("text.minescript-addons.update").getString()
+                                : Component.translatable("text.minescript-addons.download").getString();
 
                             if (installed) {
                                 Button openBtn = Button.builder(
@@ -222,7 +227,10 @@ public class AddonManagerScreen extends Screen {
 
                             Button dlBtn = Button.builder(
                                 Component.literal(dlLabel),
-                                b -> downloadFile(repoRef, fileRef)
+                                b -> {
+                                    if (needsUpdate) updateFile(repoRef, fileRef);
+                                    else downloadFile(repoRef, fileRef);
+                                }
                             ).bounds(rightEdge - 65, fy, 60, 18).build();
                             dlBtn.active = !dling;
                             cardButtons.add(dlBtn);
@@ -318,9 +326,11 @@ public class AddonManagerScreen extends Screen {
                             if (fy < scissorTop) { fy += 22; continue; }
 
                             Path scriptFolder = ScriptManager.getScriptFolder(config.getScriptFolder());
-                            boolean installed = ScriptManager.isScriptInstalled(file.getName(), scriptFolder);
-                            String mark = installed ? " [Installed]" : "";
-                            int fileColor = installed ? 0xFF55FF55 : 0xFFC0C0C0;
+                            boolean installed = ScriptManager.isScriptInstalled(file.getName(), scriptFolder)
+                                || config.getInstalledScripts().containsKey(file.getName());
+                            boolean needsUpdate = installed && config.isUpdateAvailable(file.getName(), file.getSha());
+                            String mark = !installed ? "" : needsUpdate ? " [Update available]" : " [Installed]";
+                            int fileColor = !installed ? 0xFFC0C0C0 : needsUpdate ? 0xFFFFAA00 : 0xFF55FF55;
                             gui.drawString(font, Component.literal("  " + file.getName() + mark),
                                 cardLeft + 4, fy + 2, fileColor, false);
 
@@ -412,15 +422,37 @@ public class AddonManagerScreen extends Screen {
         downloadingUrls.add(url);
         rebuildCardButtons();
 
-        GitHubAPI.downloadFile(file.getName(), file.getDownloadUrl(), ScriptManager.getScriptFolder(config.getScriptFolder()))
+        UpdateManager.installFile(repo, file, config, ScriptManager.getScriptFolder(config.getScriptFolder()))
             .whenComplete((result, error) -> {
                 downloadingUrls.remove(url);
                 if (error != null) {
                     setStatus(Component.literal("§c" + error.getMessage()));
                 } else if (result.success()) {
-                    config.markInstalled(result.fileName());
                     setStatus(Component.translatable(
                         "text.minescript-addons.download_success", result.fileName()));
+                } else {
+                    setStatus(Component.translatable(
+                        "text.minescript-addons.download_failed",
+                        result.fileName(), result.errorMessage()));
+                }
+                rebuildCardButtons();
+            });
+    }
+
+    private void updateFile(RepoEntry repo, ScriptFile file) {
+        String url = file.getDownloadUrl();
+        if (downloadingUrls.contains(url)) return;
+        downloadingUrls.add(url);
+        rebuildCardButtons();
+
+        UpdateManager.updateFile(repo, file, config, ScriptManager.getScriptFolder(config.getScriptFolder()))
+            .whenComplete((result, error) -> {
+                downloadingUrls.remove(url);
+                if (error != null) {
+                    setStatus(Component.literal("§c" + error.getMessage()));
+                } else if (result.success()) {
+                    setStatus(Component.translatable(
+                        "text.minescript-addons.update_success", result.fileName()));
                 } else {
                     setStatus(Component.translatable(
                         "text.minescript-addons.download_failed",
