@@ -2,6 +2,7 @@ package com.minescript.addons.client;
 
 import com.minescript.addons.command.ModCommands;
 import com.minescript.addons.config.ModConfig;
+import com.minescript.addons.manager.PythonDetector;
 import com.minescript.addons.manager.ScriptManager;
 import com.minescript.addons.mixin.ScreenAccessor;
 import com.minescript.addons.screen.AddRepoPopup;
@@ -9,7 +10,9 @@ import com.minescript.addons.screen.AddonManagerScreen;
 import com.minescript.addons.screen.ImageButton;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,7 @@ public class MinescriptAddonsClient implements ClientModInitializer {
     public void onInitializeClient() {
         ModCommands.register();
         MinescriptErrorHandler.register();
+        runPythonAutoDetectOnce();
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PauseScreen)) return;
@@ -53,6 +57,55 @@ public class MinescriptAddonsClient implements ClientModInitializer {
                     Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/plus.png"),
                     () -> client.setScreen(new AddRepoPopup((PauseScreen) screen, ModConfig.load(), () -> {}))
                 ));
+            }
+        });
+    }
+
+    private static void runPythonAutoDetectOnce() {
+        ModConfig config;
+        try {
+            config = ModConfig.load();
+        } catch (Exception e) {
+            LOGGER.warn("Python auto-detect skipped: failed to load config: {}", e.getMessage());
+            return;
+        }
+        if (!config.isAutoDetectPython()) {
+            LOGGER.info("Python auto-detect disabled in settings, skipping");
+            return;
+        }
+        PythonDetector.fixIfNeededAsync(result -> {
+            if (result.status() == PythonDetector.Status.UPDATED && result.selected() != null) {
+                LOGGER.info("Minescript python path set to: {}", result.selected());
+                notifyPythonUpdated(result.selected().toString());
+            } else if (result.status() == PythonDetector.Status.SKIPPED_NO_PYTHON) {
+                LOGGER.warn("No Python installation found — Minescript python path left unchanged");
+                notifyPythonNotFound();
+            }
+        });
+    }
+
+    private static void notifyPythonUpdated(String path) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) {
+            return;
+        }
+        client.execute(() -> {
+            if (client.gui != null) {
+                client.gui.getChat().addMessage(
+                    Component.translatable("text.minescript-addons.python_updated", path));
+            }
+        });
+    }
+
+    private static void notifyPythonNotFound() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) {
+            return;
+        }
+        client.execute(() -> {
+            if (client.gui != null) {
+                client.gui.getChat().addMessage(
+                    Component.translatable("text.minescript-addons.python_not_found"));
             }
         });
     }

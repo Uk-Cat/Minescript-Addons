@@ -52,7 +52,7 @@ public class AddonManagerScreen extends Screen {
     private int statusTimer;
 
     private final List<AbstractWidget> cardButtons = new ArrayList<>();
-    private ImageButton githubBtn, discordBtn, settingsBtn;
+    private ImageButton githubBtn, discordBtn, settingsBtn, docsBtn;
 
     public AddonManagerScreen(Screen parent) {
         super(Component.translatable("text.minescript-addons.title"));
@@ -117,6 +117,11 @@ public class AddonManagerScreen extends Screen {
             width - 30, 6, 22, 22,
             Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/setting.png"),
             () -> openSettings()
+        ));
+        docsBtn = addRenderableWidget(new ImageButton(
+            width - 108, 6, 22, 22,
+            Identifier.fromNamespaceAndPath("minescript-addons", "textures/gui/addons.png"),
+            () -> openDocumentation()
         ));
         rebuildCardButtons();
     }
@@ -339,6 +344,7 @@ public class AddonManagerScreen extends Screen {
         if (githubBtn != null) githubBtn.render(gui, mouseX, mouseY, delta);
         if (discordBtn != null) discordBtn.render(gui, mouseX, mouseY, delta);
         if (settingsBtn != null) settingsBtn.render(gui, mouseX, mouseY, delta);
+        if (docsBtn != null) docsBtn.render(gui, mouseX, mouseY, delta);
 
         if (statusMessage != null && statusTimer > 0) {
             int sw = font.width(statusMessage);
@@ -483,6 +489,10 @@ public class AddonManagerScreen extends Screen {
         } catch (Exception e) {
             LOGGER.error("Failed to open URL: {}", e.getMessage());
         }
+    }
+
+    private void openDocumentation() {
+        Minecraft.getInstance().setScreen(new DocumentationScreen(this));
     }
 
     private void deleteRepo(RepoEntry repo) {

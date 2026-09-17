@@ -36,9 +36,16 @@
     "text.minescript-addons.show_folder_button": "Show Folder Button: %s",
     "text.minescript-addons.show_add_repo_button": "Show Add Repo Button: %s",
     "text.minescript-addons.auto_copy_to_clipboard": "Auto-Copy to Clipboard: %s",
+    "text.minescript-addons.auto_detect_python": "Auto-Detect Python: %s",
+    "text.minescript-addons.python_updated": "Minescript python path set to: %s",
+    "text.minescript-addons.python_not_found": "No Python installation found — Minescript python path left unchanged",
     "text.minescript-addons.toggle_on": "ON",
     "text.minescript-addons.toggle_off": "OFF",
     "text.minescript-addons.restore": "Restore",
     "text.minescript-addons.hidden_curated_repos": "Hidden Curated Repos",
-    "text.minescript-addons.curated_hidden": "Hidden: %s"
+    "text.minescript-addons.curated_hidden": "Hidden: %s",
+    "text.minescript-addons.docs_title": "Documentation",
+    "text.minescript-addons.docs_choose": "Choose a document to view:",
+    "text.minescript-addons.docs_index": "Index",
+    "text.minescript-addons.open_in_browser": "Open in Browser"
 }

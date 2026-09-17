@@ -2,6 +2,7 @@ package com.minescript.addons.screen;
 
 import com.minescript.addons.config.ModConfig;
 import com.minescript.addons.data.RepoEntry;
+import com.minescript.addons.manager.PythonDetector;
 import com.minescript.addons.manager.ScriptManager;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -98,7 +99,28 @@ public class SettingsScreen extends Screen {
             }
         ).bounds(centerX - 150, toggleY + 72, 300, 20).build());
 
-        int restoreY = toggleY + 104;
+        addRenderableWidget(Button.builder(
+            Component.translatable("text.minescript-addons.auto_detect_python",
+                config.isAutoDetectPython()
+                    ? Component.translatable("text.minescript-addons.toggle_on")
+                    : Component.translatable("text.minescript-addons.toggle_off")),
+            btn -> {
+                boolean enabled = !config.isAutoDetectPython();
+                config.setAutoDetectPython(enabled);
+                if (enabled) {
+                    PythonDetector.fixIfNeededAsync(result -> {
+                        if (minecraft != null) {
+                            minecraft.execute(this::init);
+                        }
+                    });
+                    init();
+                } else {
+                    init();
+                }
+            }
+        ).bounds(centerX - 150, toggleY + 96, 300, 20).build());
+
+        int restoreY = toggleY + 152;
         List<RepoEntry> hiddenRepos = new java.util.ArrayList<>();
         List<RepoEntry> allCurated = ModConfig.loadCuratedRepos();
         for (RepoEntry r : allCurated) {

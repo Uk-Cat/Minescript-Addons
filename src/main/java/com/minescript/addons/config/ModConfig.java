@@ -31,6 +31,7 @@ public class ModConfig {
     private boolean showFolderButton = true;
     private boolean showAddRepoButton = true;
     private boolean autoCopyToClipboard = false;
+    private boolean autoDetectPython = true;
 
     private List<String> hiddenCuratedRepos = new ArrayList<>();
     private static List<RepoEntry> curatedReposCache = null;
@@ -61,6 +62,11 @@ public class ModConfig {
     public boolean isAutoCopyToClipboard() { return autoCopyToClipboard; }
     public void setAutoCopyToClipboard(boolean value) {
         autoCopyToClipboard = value;
+        save();
+    }
+    public boolean isAutoDetectPython() { return autoDetectPython; }
+    public void setAutoDetectPython(boolean value) {
+        autoDetectPython = value;
         save();
     }
     public List<String> getHiddenCuratedRepos() { return hiddenCuratedRepos; }
@@ -146,6 +152,9 @@ public class ModConfig {
                 if (json.has("autoCopyToClipboard")) {
                     config.autoCopyToClipboard = json.get("autoCopyToClipboard").getAsBoolean();
                 }
+                if (json.has("autoDetectPython")) {
+                    config.autoDetectPython = json.get("autoDetectPython").getAsBoolean();
+                }
                 if (json.has("hiddenCuratedRepos")) {
                     JsonArray arr = json.getAsJsonArray("hiddenCuratedRepos");
                     for (JsonElement el : arr) {
@@ -185,6 +194,7 @@ public class ModConfig {
             json.addProperty("showFolderButton", showFolderButton);
             json.addProperty("showAddRepoButton", showAddRepoButton);
             json.addProperty("autoCopyToClipboard", autoCopyToClipboard);
+            json.addProperty("autoDetectPython", autoDetectPython);
 
             JsonArray hiddenArr = new JsonArray();
             for (String url : hiddenCuratedRepos) {
