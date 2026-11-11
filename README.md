@@ -20,6 +20,7 @@ You will need [ModMenu](https://modrinth.com/mod/modmenu) as a required dependen
 - Update scripts
 - Automatically set python path in Config.txt
 - Auto help with specific error (mappings only for now)
+- Built-in Docs
 
 ### **Planned features:**
 - Automatically adding "from system.lib.minescript import *" at the start of every python file 
