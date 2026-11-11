@@ -69,7 +69,7 @@ java {
 }
 
 jar {
-	archiveFileName = "Minescript-Addons-${mod_version}.jar"
+	archiveFileName = "Minescript-Addons-${mod_version}--${minecraft_version_range}.jar"
 	def projectName = project.name
 	inputs.property "projectName", projectName
 
@@ -79,7 +79,7 @@ jar {
 }
 
 tasks.named('remapJar') {
-	archiveFileName = "Minescript-Addons-${mod_version}.jar"
+	archiveFileName = "Minescript-Addons-${mod_version}--${minecraft_version_range}.jar"
 }
 
 // configure the maven publication
