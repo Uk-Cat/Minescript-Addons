@@ -92,7 +92,7 @@ public class MinescriptAddonsClient implements ClientModInitializer {
         client.execute(() -> {
             if (client.gui != null) {
                 client.gui.getChat().addMessage(
-                    Component.translatable("text.minescript-addons.python_updated", path));
+                    Component.translatable("text.minescript-addons.python_updated"));
             }
         });
     }

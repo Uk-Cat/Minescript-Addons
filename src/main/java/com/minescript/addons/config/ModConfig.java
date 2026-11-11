@@ -13,13 +13,24 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public class ModConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger("minescript-addons");
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("minescript-addons.json");
+    /** Legacy rich list, only read once to seed URLS_PATH on first run. */
     private static final Path REPOS_PATH = FabricLoader.getInstance().getGameDir().resolve("minescript_addons_repos.json");
+    /**
+     * Single working copy of URLS.json in the game directory. Same shape as URLS.json
+     * at the repo root: {"repos": ["<github-url>", ...]}. Seeded from the jar on first
+     * run, appended to on add, pruned on delete, merged with the GitHub copy on refresh.
+     * Offline the mod just keeps using this file, so no separate offline list is needed.
+     */
+    private static final Path URLS_PATH = FabricLoader.getInstance().getGameDir().resolve("URLS.json");
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -42,7 +53,9 @@ public class ModConfig {
     private List<String> hiddenCuratedRepos = new ArrayList<>();
     private static List<RepoEntry> curatedReposCache = null;
 
-    public List<RepoEntry> getUserRepos() { return userRepos; }
+    /** @deprecated Repos now live in the single URLS.json store; use {@link #loadCuratedRepos()}. */
+    @Deprecated
+    public List<RepoEntry> getUserRepos() { return new ArrayList<>(); }
     public List<String> getInstalledFiles() { return installedFiles; }
     public java.util.Map<String, InstalledScript> getInstalledScripts() { return installedScripts; }
     public String getScriptFolder() { return scriptFolder; }
@@ -77,16 +90,18 @@ public class ModConfig {
         save();
     }
     public List<String> getHiddenCuratedRepos() { return hiddenCuratedRepos; }
-    public boolean isCuratedRepoHidden(String url) { return hiddenCuratedRepos.contains(url); }
+    /** @deprecated No longer used: repos live in the single URLS.json store. Kept for config compat. */
+    @Deprecated
+    public boolean isCuratedRepoHidden(String url) { return false; }
+    /** @deprecated Now just removes the URL from URLS.json; refresh re-pulls it from GitHub. */
+    @Deprecated
     public void hideCuratedRepo(String url) {
-        if (!hiddenCuratedRepos.contains(url)) {
-            hiddenCuratedRepos.add(url);
-            save();
-        }
+        removeRepoUrl(url);
     }
+    /** @deprecated Now just re-adds the URL to URLS.json. Prefer {@link #refreshCuratedRepos()}. */
+    @Deprecated
     public void restoreCuratedRepo(String url) {
-        hiddenCuratedRepos.remove(url);
-        save();
+        addRepoUrl(url);
     }
     public static void clearCuratedCache() { curatedReposCache = null; }
     public void setScriptFolder(String value) {
@@ -94,15 +109,14 @@ public class ModConfig {
         save();
     }
 
+    /** Adds the repo URL to the local URLS.json working copy. */
     public void addUserRepo(RepoEntry repo) {
-        userRepos.removeIf(r -> r.getUrl().equals(repo.getUrl()));
-        userRepos.add(repo);
-        save();
+        if (repo != null) addRepoUrl(repo.getUrl());
     }
 
+    /** Removes the repo URL from the local URLS.json working copy. */
     public void removeUserRepo(String url) {
-        userRepos.removeIf(r -> r.getUrl().equals(url));
-        save();
+        removeRepoUrl(url);
     }
 
     public void markInstalled(String fileName) {
@@ -275,48 +289,170 @@ public class ModConfig {
         }
     }
 
+    /** Reads the local URLS.json working copy. Offline-safe: no network involved. */
     public static List<RepoEntry> loadCuratedRepos() {
         if (curatedReposCache != null) return curatedReposCache;
-
-        List<RepoEntry> repos = loadBundledRepos();
-        curatedReposCache = repos;
-
-        GitHubAPI.fetchCuratedRepos().whenComplete((fetched, error) -> {
-            if (error == null && !fetched.isEmpty()) {
-                curatedReposCache = fetched;
-                LOGGER.info("Updated curated repos from GitHub ({} repos)", fetched.size());
-            } else if (error != null) {
-                LOGGER.warn("GitHub curated fetch failed, using bundled: {}", error.getMessage());
+        synchronized (ModConfig.class) {
+            if (curatedReposCache == null) {
+                curatedReposCache = readUrlsFile();
+                LOGGER.info("Loaded {} repos from local URLS.json", curatedReposCache.size());
             }
-        });
-
-        LOGGER.info("Loaded {} curated repos (async GitHub fetch pending)", repos.size());
-        return repos;
+            return curatedReposCache;
+        }
     }
 
-    private static List<RepoEntry> loadBundledRepos() {
-        List<RepoEntry> repos = new ArrayList<>();
+    /**
+     * Refresh = refetch the remote URLS.json from GitHub and merge any missing URLs
+     * into the local working copy. Local-only entries are kept; deleted curated repos
+     * come back (restore). Offline the fetch fails and the local file is used as-is.
+     */
+    public static CompletableFuture<List<RepoEntry>> refreshCuratedRepos() {
+        loadCuratedRepos();
+        return GitHubAPI.fetchCuratedRepos().thenApply(fetched -> {
+            if (fetched == null || fetched.isEmpty()) {
+                throw new IllegalStateException("Remote URLS.json unreachable or empty (offline?)");
+            }
+            synchronized (ModConfig.class) {
+                Set<String> urls = new LinkedHashSet<>();
+                for (RepoEntry r : curatedReposCache) urls.add(r.getUrl());
+                for (RepoEntry r : fetched) {
+                    if (!urls.contains(r.getUrl())) {
+                        urls.add(r.getUrl());
+                        curatedReposCache.add(r);
+                    }
+                }
+                saveUrlsFile(urls);
+                LOGGER.info("Refreshed URLS.json from GitHub ({} repos)", curatedReposCache.size());
+                return curatedReposCache;
+            }
+        });
+    }
+
+    /** Appends a repo URL to the local URLS.json working copy. */
+    public static void addRepoUrl(String url) {
+        if (url == null || url.isEmpty()) return;
+        synchronized (ModConfig.class) {
+            loadCuratedRepos();
+            for (RepoEntry r : curatedReposCache) {
+                if (r.getUrl().equals(url)) return;
+            }
+            curatedReposCache.add(RepoEntry.fromUrl(url, null));
+            saveUrlsFile(collectUrls(curatedReposCache));
+        }
+    }
+
+    /** Removes a repo URL from the local URLS.json working copy. */
+    public static void removeRepoUrl(String url) {
+        if (url == null) return;
+        synchronized (ModConfig.class) {
+            loadCuratedRepos();
+            boolean changed = curatedReposCache.removeIf(r -> r.getUrl().equals(url));
+            if (changed) saveUrlsFile(collectUrls(curatedReposCache));
+        }
+    }
+
+    private static List<RepoEntry> readUrlsFile() {
         try {
-            if (Files.exists(REPOS_PATH)) {
-                try (InputStream in = Files.newInputStream(REPOS_PATH)) {
-                    loadReposFromStream(in, repos);
+            if (!Files.exists(URLS_PATH)) {
+                Set<String> seed = collectSeedUrls();
+                saveUrlsFile(seed);
+                return entriesFromUrls(seed);
+            }
+            String content = Files.readString(URLS_PATH, StandardCharsets.UTF_8);
+            return entriesFromUrls(parseUrlsJson(content));
+        } catch (Exception e) {
+            LOGGER.error("Failed to read local URLS.json: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /** Accepts both the plain ["url", ...] shape and legacy [{"url": ...}] objects. */
+    private static Set<String> parseUrlsJson(String content) {
+        Set<String> urls = new LinkedHashSet<>();
+        JsonObject json = JsonParser.parseString(content).getAsJsonObject();
+        JsonArray arr = json.getAsJsonArray("repos");
+        if (arr == null) return urls;
+        for (JsonElement el : arr) {
+            if (el.isJsonPrimitive()) {
+                urls.add(el.getAsString());
+            } else if (el.isJsonObject() && el.getAsJsonObject().has("url")) {
+                urls.add(el.getAsJsonObject().get("url").getAsString());
+            }
+        }
+        return urls;
+    }
+
+    /** First-run seed: jar URLS.json, then legacy rich lists, then legacy config entries. */
+    private static Set<String> collectSeedUrls() {
+        Set<String> urls = new LinkedHashSet<>();
+        try {
+            Optional<Path> jarUrls = FabricLoader.getInstance()
+                .getModContainer(MinescriptAddonsMod.MOD_ID)
+                .flatMap(container -> container.findPath("URLS.json"));
+            if (jarUrls.isPresent()) {
+                try (InputStream in = Files.newInputStream(jarUrls.get())) {
+                    urls.addAll(parseUrlsJson(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
                 }
             } else {
-                Optional<Path> path = FabricLoader.getInstance()
-                    .getModContainer(MinescriptAddonsMod.MOD_ID)
-                    .flatMap(container -> container.findPath("minescript_addons_repos.json"));
-
-                if (path.isPresent()) {
-                    try (InputStream in = Files.newInputStream(path.get())) {
-                        loadReposFromStream(in, repos);
-                    }
-                } else {
-                    LOGGER.warn("minescript_addons_repos.json not found via mod container");
-                }
+                LOGGER.warn("URLS.json not found via mod container");
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to load bundled curated repos: {}", e.getMessage());
+            LOGGER.warn("Bundled URLS.json seed skipped: {}", e.getMessage());
         }
+        addLegacyRichUrls(REPOS_PATH, urls);
+        try {
+            Optional<Path> jarLegacy = FabricLoader.getInstance()
+                .getModContainer(MinescriptAddonsMod.MOD_ID)
+                .flatMap(container -> container.findPath("minescript_addons_repos.json"));
+            jarLegacy.ifPresent(p -> addLegacyRichUrls(p, urls));
+        } catch (Exception e) {
+            LOGGER.warn("Legacy bundled repos seed skipped: {}", e.getMessage());
+        }
+        try {
+            ModConfig legacy = ModConfig.load();
+            for (RepoEntry r : legacy.userRepos) urls.add(r.getUrl());
+            urls.removeAll(legacy.hiddenCuratedRepos);
+        } catch (Exception e) {
+            LOGGER.warn("Legacy config migration skipped: {}", e.getMessage());
+        }
+        return urls;
+    }
+
+    private static void addLegacyRichUrls(Path file, Set<String> urls) {
+        try {
+            if (file == null || !Files.exists(file)) return;
+            try (InputStream in = Files.newInputStream(file)) {
+                List<RepoEntry> tmp = new ArrayList<>();
+                loadReposFromStream(in, tmp);
+                for (RepoEntry r : tmp) urls.add(r.getUrl());
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Skipping legacy repos file {}: {}", file, e.getMessage());
+        }
+    }
+
+    private static void saveUrlsFile(java.util.Collection<String> urls) {
+        try {
+            JsonObject json = new JsonObject();
+            JsonArray arr = new JsonArray();
+            for (String u : urls) arr.add(u);
+            json.add("repos", arr);
+            Files.createDirectories(URLS_PATH.getParent());
+            Files.writeString(URLS_PATH, GSON.toJson(json), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            LOGGER.error("Failed to save local URLS.json: {}", e.getMessage());
+        }
+    }
+
+    private static Set<String> collectUrls(List<RepoEntry> repos) {
+        Set<String> urls = new LinkedHashSet<>();
+        for (RepoEntry r : repos) urls.add(r.getUrl());
+        return urls;
+    }
+
+    private static List<RepoEntry> entriesFromUrls(java.util.Collection<String> urls) {
+        List<RepoEntry> repos = new ArrayList<>();
+        for (String url : urls) repos.add(RepoEntry.fromUrl(url, null));
         return repos;
     }
 

@@ -72,7 +72,21 @@ public class ModCommands {
                     return 1;
                 })
             );
+
+            dispatcher.register(ClientCommandManager.literal("install_mappings")
+                .executes(context -> {
+                    executeInstallMappings(context.getSource());
+                    return 1;
+                })
+            );
         });
+    }
+
+    private static void executeInstallMappings(net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource source) {
+        source.sendFeedback(
+            Component.literal("Mappings install: run /install_mappings from Minescript's command handler to download client mappings.")
+                .withStyle(ChatFormatting.YELLOW)
+        );
     }
 
     private static void executeSetPath(net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource source, String path) {
@@ -84,9 +98,7 @@ public class ModCommands {
     private static void executeInstall(net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource source, String input) {
         ModConfig config = MinescriptAddonsMod.getConfig();
 
-        List<RepoEntry> allRepos = new ArrayList<>();
-        allRepos.addAll(ModConfig.loadCuratedRepos());
-        allRepos.addAll(config.getUserRepos());
+        List<RepoEntry> allRepos = new ArrayList<>(ModConfig.loadCuratedRepos());
 
         RepoEntry found = null;
         for (RepoEntry repo : allRepos) {
@@ -202,9 +214,7 @@ public class ModCommands {
         ModConfig config = MinescriptAddonsMod.getConfig();
         Path folder = ScriptManager.getScriptFolder(config.getScriptFolder());
 
-        List<RepoEntry> allRepos = new ArrayList<>();
-        allRepos.addAll(ModConfig.loadCuratedRepos());
-        allRepos.addAll(config.getUserRepos());
+        List<RepoEntry> allRepos = new ArrayList<>(ModConfig.loadCuratedRepos());
 
         List<RepoEntry> targets = new ArrayList<>();
         if (input.equalsIgnoreCase("all")) {

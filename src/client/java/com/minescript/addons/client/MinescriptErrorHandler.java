@@ -44,6 +44,10 @@ public class MinescriptErrorHandler {
     private static final Pattern SCRIPT_FILE_RE =
         Pattern.compile("minescript[\\\\/]([\\w\\- ]+)\\.pyj?");
 
+    // Detect ClassNotFoundException: net.minecraft.client.Minecraft -> missing mappings.
+    private static final Pattern MAPPINGS_MISSING_RE =
+        Pattern.compile("ClassNotFoundException:\\s*net\\.minecraft\\.client\\.Minecraft");
+
     public static void register() {
     }
 
@@ -270,6 +274,7 @@ public class MinescriptErrorHandler {
                     client.keyboardHandler.setClipboard(lastError);
                 }
                 lastPromptByJob.put(jobKey, now);
+                boolean mappingsMissing = MAPPINGS_MISSING_RE.matcher(combined).find();
                 client.gui.getChat().addMessage(
                     Component.literal("")
                         .append(Component.literal("Click ").withStyle(ChatFormatting.GOLD))
@@ -277,10 +282,16 @@ public class MinescriptErrorHandler {
                             .withStyle(Style.EMPTY
                                 .withColor(TextColor.fromRgb(0x5555FF))
                                 .withUnderlined(true)
-                                .withClickEvent(new ClickEvent.RunCommand("minescriptcopy"))
+                                .withClickEvent(new ClickEvent.RunCommand(
+                                    mappingsMissing ? "install_mappings" : "minescriptcopy"
+                                ))
                             )
                         )
-                        .append(Component.literal(jobIdSuffix + " to copy error to clipboard").withStyle(ChatFormatting.GOLD))
+                        .append(Component.literal(
+                            mappingsMissing
+                                ? " to install missing Minecraft mappings"
+                                : jobIdSuffix + " to copy error to clipboard"
+                        ).withStyle(ChatFormatting.GOLD))
                 );
             });
         }

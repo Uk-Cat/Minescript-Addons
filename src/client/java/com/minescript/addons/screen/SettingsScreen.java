@@ -1,7 +1,6 @@
 package com.minescript.addons.screen;
 
 import com.minescript.addons.config.ModConfig;
-import com.minescript.addons.data.RepoEntry;
 import com.minescript.addons.manager.PythonDetector;
 import com.minescript.addons.manager.ScriptManager;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
-import java.util.List;
 
 public class SettingsScreen extends Screen {
     private static final Logger LOGGER = LoggerFactory.getLogger("minescript-addons");
@@ -121,28 +119,20 @@ public class SettingsScreen extends Screen {
         ).bounds(centerX - 150, toggleY + 96, 300, 20).build());
 
         int restoreY = toggleY + 152;
-        List<RepoEntry> hiddenRepos = new java.util.ArrayList<>();
-        List<RepoEntry> allCurated = ModConfig.loadCuratedRepos();
-        for (RepoEntry r : allCurated) {
-            if (config.isCuratedRepoHidden(r.getUrl())) {
-                hiddenRepos.add(r);
-            }
-        }
+        restoreLabelY = restoreY;
+        restoreY += 18;
 
-        if (!hiddenRepos.isEmpty()) {
-            restoreLabelY = restoreY;
-            restoreY += 18;
-
-            addRenderableWidget(Button.builder(
-                Component.translatable("text.minescript-addons.restore"),
-                btn -> {
-                    for (RepoEntry r : hiddenRepos) {
-                        config.restoreCuratedRepo(r.getUrl());
+        addRenderableWidget(Button.builder(
+            Component.translatable("text.minescript-addons.restore"),
+            btn -> {
+                btn.active = false;
+                ModConfig.refreshCuratedRepos().whenComplete((repos, error) -> {
+                    if (minecraft != null) {
+                        minecraft.execute(this::init);
                     }
-                    init();
-                }
-            ).bounds(centerX - 150, restoreY, 300, 20).build());
-        }
+                });
+            }
+        ).bounds(centerX - 150, restoreY, 300, 20).build());
     }
 
     private int restoreLabelY = -1;
@@ -187,7 +177,7 @@ public class SettingsScreen extends Screen {
             centerX - 150, baseY - 28, 0xFFA0A0A0, false);
 
         if (restoreLabelY >= 0) {
-            gui.drawString(font, Component.translatable("text.minescript-addons.hidden_curated_repos"),
+            gui.drawString(font, Component.translatable("text.minescript-addons.default_repos"),
                 centerX - 150, restoreLabelY, 0xFFA0A0A0, false);
         }
 

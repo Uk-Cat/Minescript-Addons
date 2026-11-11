@@ -77,7 +77,7 @@ public class AddRepoPopup extends Screen {
             return;
         }
 
-        boolean duplicate = config.getUserRepos().stream()
+        boolean duplicate = ModConfig.loadCuratedRepos().stream()
             .anyMatch(r -> r.getUrl().equals(url));
         if (duplicate) {
             errorMessage = Component.translatable("text.minescript-addons.repo_already_added");
