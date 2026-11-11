@@ -17,11 +17,13 @@ You will need [ModMenu](https://modrinth.com/mod/modmenu) as a required dependen
 - Download scripts with only commands
 - Shortcuts in pause screen
 - Copy error messages for easier debugging
+- Update scripts
+- Automatically set python path in Config.txt
 
 ### **Planned features:**
 - Automatically adding "from system.lib.minescript import *" at the start of every python file 
 - Downloading multiple repos from a json text for easy transfer between profiles
 - Interface to run and kill script
-- Translstion layer to allow for cross compatibility with scripts between 1.21.x and 26.1+
+- Translation layer to allow for cross compatibility with scripts between 1.21.x and 26.1+
 
 The Mod is currently only made for 1.21.5 to 1.21.11 Fabric, other version may soon come however that is not guaranteed.
