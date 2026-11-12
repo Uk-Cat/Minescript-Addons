@@ -2,6 +2,9 @@
     "repos": [
         "https://github.com/R4z0rX/minescript-scripts/tree/7f74c3861cbf53c36c8acb12c9f3bad7e90dec75/Minescript-Plus",
         "https://github.com/R4z0rX/minescript-scripts/tree/7f74c3861cbf53c36c8acb12c9f3bad7e90dec75/WorldRender",
-        "https://github.com/SmartBoty/Minescript/tree/main/lib_inv"
+        "https://github.com/SmartBoty/Minescript/tree/main/lib_inv",
+        "https://github.com/SmartBoty/MC-Tools/tree/main",
+        "https://github.com/SmartBoty/Minescript/tree/main/eventlib",
+        "https://github.com/SmartBoty/GUI-Maker"
     ]
 }
