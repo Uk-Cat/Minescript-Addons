@@ -43,6 +43,11 @@ dependencies {
 	implementation "com.google.code.gson:gson:2.10.1"
 	// HTTP client for fetching mappings from Maven
 	implementation "org.apache.httpcomponents.client5:httpclient5:5.3.1"
+
+	// Minescript - mixin targets for direct error source access.
+	// At runtime, the real Minescript mod provides these classes.
+	// For compilation, stubs are in stubs/classes/; replace with the real Minescript jar when available.
+	compileOnly files('stubs/classes', 'libs/minescript-fabric-5.0.jar')
 }
 
 processResources {

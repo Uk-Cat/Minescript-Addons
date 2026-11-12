@@ -8,13 +8,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class MinescriptErrorHandler {
     public static String lastError = null;
@@ -33,30 +33,47 @@ public class MinescriptErrorHandler {
     private static final long PER_JOB_COOLDOWN_MILLIS = 2000;
     private static final int MAX_COPIED_CHARS = 8000;
     private static final ConcurrentHashMap<String, Long> lastPromptByJob = new ConcurrentHashMap<>();
+    // Set directly by mixins from the Job instance, no regex needed.
     private static volatile String currentJob = "";
     private static volatile long burstStartTime = 0;
     private static volatile String heldError = null;
-    private static final Pattern JOB_STATUS_RE =
-        Pattern.compile("(?:\\[(\\d+)\\]\\s*(?:Running|Exited))|(?:[Ii]n\\s+job\\s+(\\d+))");
-    // Traceback frames name the script: File "...\minescript\exchange.py", line N.
-    // Job IDs recycle (usually back to 1), so the script name is the reliable
-    // separator between different errors.
-    private static final Pattern SCRIPT_FILE_RE =
-        Pattern.compile("minescript[\\\\/]([\\w\\- ]+)\\.pyj?");
-
-    // Detect ClassNotFoundException: net.minecraft.client.Minecraft -> missing mappings.
-    private static final Pattern MAPPINGS_MISSING_RE =
-        Pattern.compile("ClassNotFoundException:\\s*net\\.minecraft\\.client\\.Minecraft");
 
     public static void register() {
     }
 
-    public static void onChatMessage(Component message) {
+    /** Called by JobMixin when a job writes to stderr. Has direct job context. */
+    public static void onJobStderr(int jobId, String[] command, String text) {
+        currentJob = String.valueOf(jobId);
+        handleMessage(formatJobMessage(jobId, command, text));
+    }
+
+    /** Called by JobMixin when a job logs an exception. Has direct job context. */
+    public static void onJobException(int jobId, String[] command, Exception e) {
+        currentJob = String.valueOf(jobId);
+        StringWriter sw = new StringWriter();
+        e.printStackTrace(new PrintWriter(sw));
+        handleMessage(formatJobMessage(jobId, command, sw.toString()));
+    }
+
+    /** Called by SystemMessageQueueMixin for system-level errors without job context. */
+    public static void onSystemError(String message) {
+        handleMessage(message);
+    }
+
+    /** Called by SystemMessageQueueMixin for info messages (job status, etc.). */
+    public static void onSystemInfo(String message) {
+        trackJobContext(message);
+    }
+
+    private static String formatJobMessage(int jobId, String[] command, String text) {
+        String cmd = (command != null && command.length > 0) ? command[0] : "?";
+        return String.format("[%d] %s %s", jobId, cmd, text);
+    }
+
+    private static void handleMessage(String text) {
         if (handlingMessage) return;
         handlingMessage = true;
         try {
-            String text = message.getString();
-
             // Note: deliberately no flush on unrelated lines. Tracebacks are
             // often interleaved with non-error lines (job status, blanks);
             // flushing on those is what printed a copy prompt every few lines.
@@ -99,29 +116,47 @@ public class MinescriptErrorHandler {
      * job ID can still be attributed to their job.
      */
     private static void trackJobContext(String text) {
-        Matcher m = JOB_STATUS_RE.matcher(text);
-        if (m.find()) {
-            currentJob = m.group(1) != null ? m.group(1) : m.group(2);
+        if (text.startsWith("[") && text.contains("]")) {
+            int end = text.indexOf(']');
+            if (end > 1) {
+                currentJob = text.substring(1, end);
+            }
         }
     }
 
     /**
-     * Resolves the grouping key for a flushed burst. Script name first (job IDs
-     * recycle, so "[1] test" and "[1] exchange" would otherwise collide), then
-     * job ID, else the latest job seen.
+     * Resolves the grouping key for a flushed burst. Uses the current job ID
+     * tracked directly from mixins/system messages (job IDs recycle, so this
+     * is paired with the script name from the error text when available).
      */
     private static String resolveJobKey(String fullError) {
-        Matcher s = SCRIPT_FILE_RE.matcher(fullError);
-        if (s.find()) {
-            return "script:" + s.group(1);
+        // Script name first (job IDs recycle, so "[1] test" and "[1] exchange"
+        // would otherwise collide).
+        int pyIdx = fullError.indexOf(".py\", line");
+        if (pyIdx > 0) {
+            int start = fullError.lastIndexOf(' ', pyIdx);
+            if (start >= 0) {
+                String script = fullError.substring(start + 1, pyIdx);
+                if (script.contains("/")) {
+                    script = script.substring(script.lastIndexOf('/') + 1);
+                }
+                if (!script.isEmpty()) {
+                    return "script:" + script;
+                }
+            }
         }
-        Matcher m = JOB_STATUS_RE.matcher(fullError);
-        if (m.find()) {
-            return "job:" + (m.group(1) != null ? m.group(1) : m.group(2));
-        }
-        Matcher b = Pattern.compile("\\[(\\d+)\\]").matcher(fullError);
-        if (b.find()) {
-            return "job:" + b.group(1);
+        int pyjIdx = fullError.indexOf(".pyj\", line");
+        if (pyjIdx > 0) {
+            int start = fullError.lastIndexOf(' ', pyjIdx);
+            if (start >= 0) {
+                String script = fullError.substring(start + 1, pyjIdx);
+                if (script.contains("/")) {
+                    script = script.substring(script.lastIndexOf('/') + 1);
+                }
+                if (!script.isEmpty()) {
+                    return "script:" + script;
+                }
+            }
         }
         return currentJob.isEmpty() ? "" : "job:" + currentJob;
     }
@@ -147,7 +182,8 @@ public class MinescriptErrorHandler {
             || text.contains("ImportError")
             || text.contains("ModuleNotFoundError")
             || text.contains("RuntimeError")
-            || text.contains("ZeroDivisionError");
+            || text.contains("ZeroDivisionError")
+            || text.contains("ClassNotFoundException");
     }
 
     private static boolean isErrorText(String text) {
@@ -159,8 +195,6 @@ public class MinescriptErrorHandler {
         if (text.contains("Exception:")) return true;
         if (text.contains("Exception in job")) return true;
         if (text.contains("Exited with error code")) return true;
-        if (text.matches("^\\w+Error:.*")) return true;
-        if (text.matches("^\\w+Warning:.*")) return true;
         if (text.startsWith("  ") && !errorBuffer.isEmpty()) return true;
         if (text.contains("No Minescript command named")) return true;
         return false;
@@ -229,10 +263,12 @@ public class MinescriptErrorHandler {
         boolean complete = isBurstComplete(combined);
         boolean holdExpired = now - burstStartTime >= MAX_HOLD_MILLIS;
 
+        boolean mappingsMissing = combined.contains("ClassNotFoundException: net.minecraft.client.Minecraft");
+
         Minecraft client = Minecraft.getInstance();
         if (client != null && client.player != null) {
             boolean autoCopy = ModConfig.load().isAutoCopyToClipboard();
-            String jobIdSuffix = extractJobId(combined);
+            String jobIdSuffix = currentJob.isEmpty() ? "" : " [Job " + currentJob + "]";
             client.execute(() -> {
                 if (recent) {
                     // Same job re-flushed inside the window: one traceback split
@@ -274,7 +310,6 @@ public class MinescriptErrorHandler {
                     client.keyboardHandler.setClipboard(lastError);
                 }
                 lastPromptByJob.put(jobKey, now);
-                boolean mappingsMissing = MAPPINGS_MISSING_RE.matcher(combined).find();
                 client.gui.getChat().addMessage(
                     Component.literal("")
                         .append(Component.literal("Click ").withStyle(ChatFormatting.GOLD))
@@ -299,19 +334,5 @@ public class MinescriptErrorHandler {
 
     public static void shutdown() {
         SCHEDULER.shutdown();
-    }
-
-    private static String extractJobId(String error) {
-        Pattern pattern = Pattern.compile("Exception in job\\s+(\\d+)");
-        Matcher matcher = pattern.matcher(error);
-        if (matcher.find()) {
-            return " [Job " + matcher.group(1) + "]";
-        }
-        pattern = Pattern.compile("Exited with error code\\s+\\d+\\s+in job\\s+(\\d+)");
-        matcher = pattern.matcher(error);
-        if (matcher.find()) {
-            return " [Job " + matcher.group(1) + "]";
-        }
-        return "";
     }
 }
